@@ -14,10 +14,10 @@ namespace SqlBenchmark
 		[Option('u', HelpText = "How many users to simulate", DefaultValue = 1)]
 		public int Users { get; set; }
 
-		[Option('n', HelpText = "How many queries to execute per user", DefaultValue = 10000)]
+		[Option('n', HelpText = "How many queries to execute per user", DefaultValue = 100000)]
 		public int Queries { get; set; }
 
-		[Option('i', HelpText = "Number of benchmark iterations to run ", DefaultValue = 10)]
+		[Option('i', HelpText = "Number of benchmark iterations to run ", DefaultValue = 1)]
 		public int Iterations { get; set; }
 
 		[Option('v', HelpText = "Use verbose logging")]
@@ -28,6 +28,9 @@ namespace SqlBenchmark
 
 		[Option("no-sample", HelpText = "Suppress printing continuous queries per second sample report")]
 		public bool NoSampling { get; set; }
+
+		[Option("no-report", HelpText = "Suppress writing a report file containing the performance numbers")]
+		public bool NoReport { get; set; }
 
 		[HelpOption]
 		public string GetUsage()

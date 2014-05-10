@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,21 +18,30 @@ namespace SqlBenchmark
 		readonly object _completedQueryCounterLock = new object();
 		volatile bool _running;
 		int _completedQueryCounter;
-		Thread _watchdogThread;
-		
-		public async Task<BenchmarkReport> BenchmarkAsync(string connectionString, int userCount, int queriesPerUser, string query, bool skipTestTable, bool timeSampling)
+		Thread _sampleThread;
+		bool _timeSampling;
+		string _reportFilename;
+
+		public async Task<BenchmarkReport> BenchmarkAsync(string connectionString, int userCount, int queriesPerUser, string query, bool skipTestTable, bool timeSampling, bool writeReport)
 		{
+			// Options
+			_timeSampling = timeSampling;
+			if (writeReport) {
+				_reportFilename = string.Format("BenchmarkReport-{0}.csv", DateTime.UtcNow.ToString("yyyy-MM-dd_hh_mm_ss"));
+				_log.Info(string.Format("Writing progress report to: {0}", _reportFilename));
+			} else {
+				_reportFilename = null;
+			}
+ 
 			// Verify Schema
 			if (!skipTestTable)
 				await CreateSchemaAsync(connectionString);
 
-			// Start Watchdog Thread?
+			// Start Watchdog Thread
 			_running = true;
-			if (timeSampling) {
-				_watchdogThread = new Thread(WatchdogThreadStart);
-				_watchdogThread.IsBackground = true;
-				_watchdogThread.Start();
-			}
+			_sampleThread = new Thread(WatchdogThreadStart);
+			_sampleThread.IsBackground = true;
+			_sampleThread.Start();
 
 			// Create User Tasks
 			_completedQueryCounter = 0;
@@ -48,8 +58,8 @@ namespace SqlBenchmark
 			sw.Stop();
 
 			// Stop Thread
-			if (_watchdogThread != null)
-				_watchdogThread.Join();
+			_sampleThread.Join();
+			_sampleThread = null;
 
 			// Calculate Stats
 			var totalQueriesExecuted = userCount*queriesPerUser;
@@ -76,7 +86,15 @@ namespace SqlBenchmark
 
 		void WatchdogThreadStart()
 		{
+			// Wrie Log Header
+			if (_reportFilename != null)
+				File.WriteAllText(_reportFilename, "UtcDateTime,Sample,QueriesPerSecond\n");
+
+			var sampleNumber = 0;
 			while (_running) {
+				// Wait
+				Thread.Sleep(1000);
+
 				// Capture Stats
 				int count;
 				lock (_completedQueryCounterLock) {
@@ -85,10 +103,12 @@ namespace SqlBenchmark
 				}
 				
 				// Print
-				_log.Info(string.Format("Queries Per Second: {0}", count.ToString("N0")));
+				if (_timeSampling)
+					_log.Info(string.Format("Queries Per Second: {0}", count.ToString("N0")));
 
-				// Wait
-				Thread.Sleep(1000);
+				// Log
+				if (_reportFilename != null)
+					File.AppendAllText(_reportFilename, string.Format("{0},{1},{2}\n", DateTime.UtcNow.ToString("yyyy-MM-dd hh:mm:ss"), ++sampleNumber, count));
 			}
 		}
 
