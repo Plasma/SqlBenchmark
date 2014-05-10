@@ -14,10 +14,11 @@ namespace SqlBenchmark
 		const string TestTableName = "BenchmarkTable";
 		const int TestTableRowCount = 1000000;
 		
-		public async Task<BenchmarkReport> BenchmarkAsync(string connectionString, int userCount, int queriesPerUser, string query)
+		public async Task<BenchmarkReport> BenchmarkAsync(string connectionString, int userCount, int queriesPerUser, string query, bool skipTestTable)
 		{
 			// Verify Schema
-			await CreateSchemaAsync(connectionString);
+			if (!skipTestTable)
+				await CreateSchemaAsync(connectionString);
 
 			// Create User Tasks
 			var sw = Stopwatch.StartNew();

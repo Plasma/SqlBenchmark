@@ -23,6 +23,9 @@ namespace SqlBenchmark
 		[Option('v', HelpText = "Use verbose logging")]
 		public bool Verbose { get; set; }
 
+		[Option('s', HelpText = "Skip creating the test database table")]
+		public bool SkipTestTable { get; set; }
+
 		[HelpOption]
 		public string GetUsage()
 		{
