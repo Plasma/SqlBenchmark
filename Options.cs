@@ -26,6 +26,9 @@ namespace SqlBenchmark
 		[Option('s', HelpText = "Skip creating the test database table")]
 		public bool SkipTestTable { get; set; }
 
+		[Option("no-sample", HelpText = "Suppress printing continuous queries per second sample report")]
+		public bool NoSampling { get; set; }
+
 		[HelpOption]
 		public string GetUsage()
 		{

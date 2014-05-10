@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using log4net;
 
@@ -10,17 +11,30 @@ namespace SqlBenchmark
 {
 	public class BenchmarkService
 	{
-		readonly ILog _log = LogManager.GetLogger(typeof (BenchmarkService));
 		const string TestTableName = "BenchmarkTable";
 		const int TestTableRowCount = 1000000;
+		readonly ILog _log = LogManager.GetLogger(typeof(BenchmarkService));
+		readonly object _completedQueryCounterLock = new object();
+		volatile bool _running;
+		int _completedQueryCounter;
+		Thread _watchdogThread;
 		
-		public async Task<BenchmarkReport> BenchmarkAsync(string connectionString, int userCount, int queriesPerUser, string query, bool skipTestTable)
+		public async Task<BenchmarkReport> BenchmarkAsync(string connectionString, int userCount, int queriesPerUser, string query, bool skipTestTable, bool timeSampling)
 		{
 			// Verify Schema
 			if (!skipTestTable)
 				await CreateSchemaAsync(connectionString);
 
+			// Start Watchdog Thread?
+			_running = true;
+			if (timeSampling) {
+				_watchdogThread = new Thread(WatchdogThreadStart);
+				_watchdogThread.IsBackground = true;
+				_watchdogThread.Start();
+			}
+
 			// Create User Tasks
+			_completedQueryCounter = 0;
 			var sw = Stopwatch.StartNew();
 			var tasks = new List<Task<Stopwatch>>();
 			for(var i = 0; i < userCount; i++) {
@@ -30,7 +44,12 @@ namespace SqlBenchmark
 
 			// Await
 			await Task.WhenAll(tasks);
+			_running = false;
 			sw.Stop();
+
+			// Stop Thread
+			if (_watchdogThread != null)
+				_watchdogThread.Join();
 
 			// Calculate Stats
 			var totalQueriesExecuted = userCount*queriesPerUser;
@@ -53,6 +72,24 @@ namespace SqlBenchmark
 			report.AverageQueriesPerSecond = averageQueriesPerSecond;
 
 			return report;
+		}
+
+		void WatchdogThreadStart()
+		{
+			while (_running) {
+				// Capture Stats
+				int count;
+				lock (_completedQueryCounterLock) {
+					count = _completedQueryCounter;
+					_completedQueryCounter = 0;
+				}
+				
+				// Print
+				_log.Info(string.Format("Queries Per Second: {0}", count.ToString("N0")));
+
+				// Wait
+				Thread.Sleep(1000);
+			}
 		}
 
 		async Task CreateSchemaAsync(string connectionString)
@@ -158,6 +195,10 @@ namespace SqlBenchmark
 					stopwatch.Start();
 					await command.ExecuteNonQueryAsync();
 					stopwatch.Stop();
+
+					// Increment query counter
+					lock (_completedQueryCounterLock)
+						_completedQueryCounter++;
 				}
 			}
 

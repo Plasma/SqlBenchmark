@@ -31,7 +31,7 @@ namespace SqlBenchmark
 					_logger.Info("Starting Benchmark");
 
 				// Run Benchmark
-				var report = await benchmarkService.BenchmarkAsync(options.ConnectionString, options.Users, options.Queries, queryOrFile, options.SkipTestTable);
+				var report = await benchmarkService.BenchmarkAsync(options.ConnectionString, options.Users, options.Queries, queryOrFile, options.SkipTestTable, !options.NoSampling);
 
 				// Display Report
 				_logger.Info(string.Format("[{3}/{4}] Benchmark Completed [Runtime: {0}ms | Average queries/sec: {1} | Users: {2} | Per-user Queries: {5}]", report.TotalQueryRuntime.TotalMilliseconds.ToString("N0"), report.AverageQueriesPerSecond.ToString("N0"), report.UserCount.ToString("N0"), i + 1, options.Iterations, options.Queries.ToString("N0")));
