@@ -18,6 +18,7 @@ namespace SqlBenchmark
 		readonly object _completedQueryCounterLock = new object();
 		volatile bool _running;
 		int _completedQueryCounter;
+		int _timedOutQueryCounter;
 		Thread _sampleThread;
 		bool _timeSampling;
 		string _reportFilename;
@@ -88,7 +89,7 @@ namespace SqlBenchmark
 		{
 			// Wrie Log Header
 			if (_reportFilename != null)
-				File.WriteAllText(_reportFilename, "UtcDateTime,Sample,QueriesPerSecond\n");
+				File.WriteAllText(_reportFilename, "UtcDateTime,Sample,QueriesPerSecond,TimeoutsPerSecond\n");
 
 			var sampleNumber = 0;
 			while (_running) {
@@ -96,19 +97,27 @@ namespace SqlBenchmark
 				Thread.Sleep(1000);
 
 				// Capture Stats
-				int count;
+				int queryCount;
+				int timeoutCount;
 				lock (_completedQueryCounterLock) {
-					count = _completedQueryCounter;
+					queryCount = _completedQueryCounter;
+					timeoutCount = _timedOutQueryCounter;
 					_completedQueryCounter = 0;
+					_timedOutQueryCounter = 0;
 				}
 				
 				// Print
-				if (_timeSampling)
-					_log.Info(string.Format("Queries Per Second: {0}", count.ToString("N0")));
+				if (_timeSampling) {
+					if (timeoutCount > 0)
+						Console.ForegroundColor = ConsoleColor.Yellow;
+
+					_log.Info(string.Format("Queries Per Second: {0} | Timeouts Per Second: {1}", queryCount.ToString("N0"), timeoutCount.ToString("N0")));
+					Console.ResetColor();
+				}
 
 				// Log
 				if (_reportFilename != null)
-					File.AppendAllText(_reportFilename, string.Format("{0},{1},{2}\n", DateTime.UtcNow.ToString("yyyy-MM-dd hh:mm:ss"), ++sampleNumber, count));
+					File.AppendAllText(_reportFilename, string.Format("{0},{1},{2},{3}\n", DateTime.UtcNow.ToString("yyyy-MM-dd hh:mm:ss"), ++sampleNumber, queryCount, timeoutCount));
 			}
 		}
 
@@ -213,7 +222,19 @@ namespace SqlBenchmark
 
 					// Execute Tran under Stopwatch
 					stopwatch.Start();
-					await command.ExecuteNonQueryAsync();
+					try {
+						await command.ExecuteNonQueryAsync();
+					} catch (SqlException ex) {
+						// Only Handle Timeout Exceptions
+						if (!ex.Message.StartsWith("Timeout expired"))
+							throw;
+
+						// Do not record this as a valid transaction
+						lock (_completedQueryCounterLock)
+							_timedOutQueryCounter++;
+
+						continue;
+					}
 					stopwatch.Stop();
 
 					// Increment query counter
