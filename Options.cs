@@ -11,7 +11,7 @@ namespace SqlBenchmark
 		[Option('q', HelpText = "Query to execute for each user. Optionally specify a filename to read a query from.", DefaultValue = "SELECT * FROM BenchmarkTable Where Id = '%guid%'")]
 		public string Query { get; set; }
 
-		[Option('u', HelpText = "How many users to simulate", DefaultValue = 1)]
+		[Option('u', HelpText = "How many users to simulate", DefaultValue = 10)]
 		public int Users { get; set; }
 
 		[Option('n', HelpText = "How many queries to execute per user", DefaultValue = 100000)]
